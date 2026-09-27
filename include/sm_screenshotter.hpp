@@ -35,11 +35,25 @@ public:
         const std::string up_arrow_path{assets_path + "/up_arrow.bmp"};
         const std::string down_arrow_path{assets_path + "/down_arrow.bmp"};
         
-        load_32_bits_per_pixel_bitmap(left_arrow_path, m_left_arrow_bmp_buffer);
-        load_32_bits_per_pixel_bitmap(left_arrow_path, m_up_arrow_bmp_buffer);
-        load_32_bits_per_pixel_bitmap(left_arrow_path, m_right_arrow_bmp_buffer);
-        load_32_bits_per_pixel_bitmap(left_arrow_path, m_down_arrow_bmp_buffer);
+        m_loaded_all_assets = load_32_bits_per_pixel_bitmap(left_arrow_path, m_left_arrow_bmp_buffer);
+        m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(left_arrow_path, m_up_arrow_bmp_buffer);
+        m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(left_arrow_path, m_right_arrow_bmp_buffer);
+        m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(left_arrow_path, m_down_arrow_bmp_buffer);
     }
+
+     operator bool() const {
+        return m_loaded_all_assets;
+     }
+
+     bool loaded_all_assets() const {
+        return m_loaded_all_assets;
+     }
+
+     bool save() {
+        if (!m_loaded_all_assets) {
+            return false;
+        }
+     }
 
 private:
 
@@ -47,6 +61,7 @@ private:
     std::vector<uint8_t> m_right_arrow_bmp_buffer;
     std::vector<uint8_t> m_up_arrow_bmp_buffer;
     std::vector<uint8_t> m_down_arrow_bmp_buffer;
+    bool m_loaded_all_assets;
 
     static bool load_32_bits_per_pixel_bitmap(const std::string& path, std::vector<uint8_t>& bitmap_buffer) {
         FILE* file_handle = fopen(path.c_str(), "rb");
