@@ -1,7 +1,6 @@
 #ifndef SM_SCREENSHOTTER_HPP
 #define SM_SCREENSHOTTER_HPP
 
-#include <random>
 #include <stdint.h>
 #include <string>
 #include <vector>
@@ -25,12 +24,38 @@ struct bitmap_header_t {
     uint32_t vertical_resolution;
     uint32_t color_pallete_count;
     uint32_t important_colors_used;
-  } __attribute__((packed));
+} __attribute__((packed));
+
+enum stepmania_note_type_t : char {
+    empty = '0',
+    tap = '1',
+    hold = '2',
+    roll = '3',
+    mine = 'M'
+};
+
+struct stepmania_note_rows_t {
+    stepmania_note_type_t notes[4];
+};
+
+struct stepmania_chart_t {
+    uint8_t level;
+    bool is_single_chart;
+    std::vector<stepmania_note_type_t> note_rows;
+};
+
+
+struct stepmania_sim_file_t {
+    std::string title;
+    std::string artist;
+    double bpm;
+    std::vector<stepmania_chart_t> charts;
+};
 
 class sm_screenshotter_t {
 public:
 
-    sm_screenshotter_t(const std::string& assets_path) {
+    sm_screenshotter_t(const std::string& assets_path, const std::string& chart_path) {
         const std::string left_arrow_path{assets_path + "/left_arrow.bmp"};
         const std::string right_arrow_path{assets_path + "/right_arrow.bmp"};
         const std::string up_arrow_path{assets_path + "/up_arrow.bmp"};
@@ -40,6 +65,8 @@ public:
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(right_arrow_path, m_right_arrow_bmp_header, m_right_arrow_bmp_buffer);
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(up_arrow_path, m_up_arrow_bmp_header, m_up_arrow_bmp_buffer);
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(down_arrow_path, m_down_arrow_bmp_header, m_down_arrow_bmp_buffer);
+
+        m_loaded_all_assets &= load_sim_file(chart_path, m_loaded_sim_file);
     }
 
      operator bool() const {
@@ -51,9 +78,7 @@ public:
      }
 
      bool save() {
-        if (!m_loaded_all_assets) {
-            return false;
-        }
+        return m_loaded_all_assets;
      }
 
 private:
@@ -66,7 +91,12 @@ private:
     bitmap_header_t m_right_arrow_bmp_header;
     bitmap_header_t m_up_arrow_bmp_header;
     bitmap_header_t m_down_arrow_bmp_header;
+    stepmania_sim_file_t m_loaded_sim_file;
     bool m_loaded_all_assets;
+
+    static bool load_sim_file(const std::string& path, stepmania_sim_file_t& sim_file) {
+        return false;
+    }
 
     static bool load_32_bits_per_pixel_bitmap(const std::string& path, bitmap_header_t& header, std::vector<uint8_t>& pixel_buffer) {
         
