@@ -2,12 +2,19 @@
 #define SM_SCREENSHOTTER_HPP
 
 #include <stdint.h>
+#include <sstream>
 #include <string>
+#include <sys/fcntl.h>
 #include <vector>
 #include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 constexpr const size_t MAX_BMP_BUFFER_SIZE{128000};
 
+// To render the screenshot...
 struct bitmap_header_t {
     char magic_field[2];
     uint32_t bitmap_total_size;
@@ -25,6 +32,19 @@ struct bitmap_header_t {
     uint32_t color_pallete_count;
     uint32_t important_colors_used;
 } __attribute__((packed));
+
+// For rendering the text a linux screen font format...
+ struct psf_header_t {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t this_header_size; // Note: Will be always set to sizeof(psf_header_t)
+    uint32_t has_unicode_table;
+    uint32_t glyph_size; //
+    uint32_t bytes_per_glyph;
+    uint32_t glyph_height;
+    uint32_t glyph_width;
+  };
+
 
 enum stepmania_note_type_t : char {
     empty = '0',
@@ -46,9 +66,9 @@ struct stepmania_chart_t {
 
 
 struct stepmania_sim_file_t {
+    double bpm;
     std::string title;
     std::string artist;
-    double bpm;
     std::vector<stepmania_chart_t> charts;
 };
 
@@ -95,7 +115,77 @@ private:
     bool m_loaded_all_assets;
 
     static bool load_sim_file(const std::string& path, stepmania_sim_file_t& sim_file) {
-        return false;
+
+        int sim_file_descriptor = open(path.c_str(), O_RDONLY);
+        struct stat file_stat;
+        if (-1 == fstat(sim_file_descriptor, &file_stat)) {
+            close(sim_file_descriptor);
+            return false;
+        }
+
+        const size_t bytes_to_read{static_cast<size_t>(file_stat.st_size)};
+        char* entire_file_data = static_cast<char*>(mmap(nullptr, 
+                  bytes_to_read, PROT_READ, MAP_PRIVATE, sim_file_descriptor, 0));
+
+        if (MAP_FAILED == entire_file_data) {
+            close(sim_file_descriptor);
+            return false;
+        }
+
+        if (nullptr == entire_file_data) {
+            close(sim_file_descriptor);
+            return false;
+        }
+
+        std::cout << bytes_to_read << " bytes read using mmap..." << std::endl;
+
+        std::string current_line;
+        for(size_t index = 0; index < bytes_to_read; index++) {
+            const char& current_char = entire_file_data[index];
+            switch(current_char) {
+
+                case '\n': {
+                    continue;
+                }
+
+                case '\r': {
+                    continue;
+                }
+
+                case ';': {
+                    std::stringstream stream{current_line};
+                    std::string key_name;
+                    if (!std::getline(stream, key_name, ':')) {
+                        continue;
+                    }
+                    std::string value_as_string;
+                    if (!std::getline(stream, value_as_string, ':')) {
+                        continue;
+                    }
+
+                    if ("#TITLE" == key_name) {
+                        sim_file.title = value_as_string;
+                    }
+
+                    if ("#ARITS")
+
+                    std::cout << "key_name=" << key_name << " value_as_string=" << value_as_string << std::endl;
+                    current_line = "";
+                    break;
+                }
+
+                default: {
+                    current_line += current_char;
+                    break;
+                }
+
+            };
+            
+        }
+
+        close(sim_file_descriptor);
+
+        return true;
     }
 
     static bool load_32_bits_per_pixel_bitmap(const std::string& path, bitmap_header_t& header, std::vector<uint8_t>& pixel_buffer) {

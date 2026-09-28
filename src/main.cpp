@@ -2,6 +2,6 @@
 #include <sm_screenshotter.hpp>
 
 int main(int argument_count, char** arguments) {
-    std::cout << "WIP Pinga Madre!" << std::endl;
+    sm_screenshotter_t s{"../assets/", "../assets/Enjoy The Show/Enjoy The Show.ssc"};
     return 0;
 }
