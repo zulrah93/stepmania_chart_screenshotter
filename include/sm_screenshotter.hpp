@@ -1,8 +1,9 @@
 #ifndef SM_SCREENSHOTTER_HPP
 #define SM_SCREENSHOTTER_HPP
 
+#include <iterator>
 #include <stdint.h>
-#include <sstream>
+#include <utility>
 #include <string>
 #include <sys/fcntl.h>
 #include <vector>
@@ -66,7 +67,7 @@ struct stepmania_chart_t {
 
 
 struct stepmania_sim_file_t {
-    double bpm;
+    double bpm; // lowest bpm to highest
     std::string title;
     std::string artist;
     std::vector<stepmania_chart_t> charts;
@@ -85,7 +86,7 @@ public:
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(right_arrow_path, m_right_arrow_bmp_header, m_right_arrow_bmp_buffer);
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(up_arrow_path, m_up_arrow_bmp_header, m_up_arrow_bmp_buffer);
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(down_arrow_path, m_down_arrow_bmp_header, m_down_arrow_bmp_buffer);
-
+        m_loaded_sim_file = {};
         m_loaded_all_assets &= load_sim_file(chart_path, m_loaded_sim_file);
     }
 
@@ -153,23 +154,66 @@ private:
                 }
 
                 case ';': {
-                    std::stringstream stream{current_line};
+                    current_line += ';';
                     std::string key_name;
-                    if (!std::getline(stream, key_name, ':')) {
-                        continue;
-                    }
+                    std::string temp_string;
                     std::string value_as_string;
-                    if (!std::getline(stream, value_as_string, ':')) {
-                        continue;
+                    for(size_t index = 0; index < current_line.size(); index++) {
+                        const char& current_char = current_line[index];
+                        switch(current_char) {
+                            case ';': {
+                                 value_as_string = temp_string;
+                                 temp_string = "";
+                                 break;
+                            };
+                            case ':': {
+                                key_name = temp_string;
+                                temp_string = "";
+                                break;
+                            }
+                            default: {
+                                temp_string += current_char;
+                                break;
+                            }
+                        }
                     }
-
+                    
                     if ("#TITLE" == key_name) {
                         sim_file.title = value_as_string;
                     }
 
-                    if ("#ARITS")
+                    if ("#ARTIST" == key_name) {
+                        sim_file.artist = value_as_string;
+                    }
 
-                    std::cout << "key_name=" << key_name << " value_as_string=" << value_as_string << std::endl;
+                    if ("#BPMS" == key_name) {
+                        value_as_string += ';';
+                        std::string temp_string;
+                        for(size_t index = 0; index < value_as_string.size(); index++) {
+                            const char& current_char = value_as_string[index];
+                            switch(current_char) {
+                                case ';': {
+                                    sim_file.bpm = std::stod(temp_string);
+                                    temp_string = "";
+                                    break;
+                                };
+                                case '=': {
+                                    temp_string = "";
+                                    break;
+                                }
+                                default: {
+                                    temp_string += current_char;
+                                    break;
+                                }
+                            }
+                        }
+                        std::cout << "BPM is " << sim_file.bpm << std::endl;
+                    }
+
+                    if ("#NOTES" == key_name) {
+                      std::cout << value_as_string << std::endl;
+                    }
+
                     current_line = "";
                     break;
                 }
