@@ -1,6 +1,8 @@
 #ifndef SM_SCREENSHOTTER_HPP
 #define SM_SCREENSHOTTER_HPP
 
+#include <cstdint>
+#include <cstdio>
 #include <iterator>
 #include <stdint.h>
 #include <utility>
@@ -14,6 +16,7 @@
 #include <sys/stat.h>
 
 constexpr const size_t MAX_BMP_BUFFER_SIZE{128000};
+constexpr const uint32_t WHITE_RGB{0xffffffff};
 
 // To render the screenshot...
 struct bitmap_header_t {
@@ -55,17 +58,13 @@ enum stepmania_note_type_t : char {
     mine = 'M'
 };
 
-struct stepmania_note_row_t {
-    stepmania_note_type_t notes[4];
-};
-
 struct stepmania_measure_t {
-    std::vector<stepmania_note_row_t> rows;
+    std::vector<stepmania_note_type_t> notes;
 };
 
 struct stepmania_chart_t {
-    uint8_t level;
     bool is_single_chart;
+    uint16_t level;
     std::vector<stepmania_measure_t> measures;
 };
 
@@ -92,6 +91,36 @@ public:
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(down_arrow_path, m_down_arrow_bmp_header, m_down_arrow_bmp_buffer);
         m_loaded_sim_file = {};
         m_loaded_all_assets &= load_sim_file(chart_path, m_loaded_sim_file);
+
+        m_height = 0;
+        for(const auto& measure : m_loaded_sim_file.charts[0].measures) {
+           m_height += (measure.notes.size() / 4ul);
+        }
+
+        m_height *= 132;
+
+        const size_t total_size{m_width * m_height};
+
+        m_bitmap_header = {};
+        m_bitmap_header.magic_field[0] = 'B';
+        m_bitmap_header.magic_field[1] = 'M';
+        m_bitmap_header.offset_to_pixels = sizeof(bitmap_header_t);
+        m_bitmap_header.plane_count = 1;
+        m_bitmap_header.compression_method = 0;
+        m_bitmap_header.horizontal_resolution = m_bitmap_header.vertical_resolution = 1;
+        m_bitmap_header.color_pallete_count = 0;
+        m_bitmap_header.important_colors_used = 0;
+        m_bitmap_header.bits_per_pixel = 32;
+        m_bitmap_header.width = m_width;
+        m_bitmap_header.height = m_height;
+        m_bitmap_header.data_size = sizeof(bitmap_header_t) + total_size;
+        m_bitmap_header.header_size = sizeof(bitmap_header_t);
+
+        m_pixel_buffer.reserve(total_size);
+       
+        for(size_t _ = 0; _ < total_size; _++) {
+            m_pixel_buffer.push_back(WHITE_RGB);
+        }
     }
 
      operator bool() const {
@@ -102,8 +131,24 @@ public:
         return m_loaded_all_assets;
      }
 
-     bool save() {
-        return m_loaded_all_assets;
+     bool save(const std::string& path) {
+        FILE* bitmap_handle = fopen(path.c_str(), "wb");
+        if (nullptr == bitmap_handle) {
+            fclose(bitmap_handle);
+            return false;
+        }
+        
+        size_t bytes_read{0};
+        bytes_read = fwrite(reinterpret_cast<uint8_t*>(&m_bitmap_header), 1, sizeof(bitmap_header_t), bitmap_handle);
+        
+        if (sizeof(bitmap_header_t) != bytes_read) {
+            fclose(bitmap_handle);
+            return false;
+        }
+
+        bytes_read += fwrite(m_pixel_buffer.data(), m_pixel_buffer.size(), sizeof(uint32_t), bitmap_handle);
+        fclose(bitmap_handle);
+        return bytes_read == (sizeof(bitmap_header_t) + (m_pixel_buffer.size() * sizeof(uint32_t)));
      }
 
 private:
@@ -118,6 +163,28 @@ private:
     bitmap_header_t m_down_arrow_bmp_header;
     stepmania_sim_file_t m_loaded_sim_file;
     bool m_loaded_all_assets;
+    const size_t m_width{600};
+    size_t m_height;
+    bitmap_header_t m_bitmap_header;
+    std::vector<uint32_t> m_pixel_buffer;
+
+    void plot_pixel(size_t x, size_t y, uint32_t rgb) {
+        m_pixel_buffer[(y * m_width) + x] = rgb;
+    }
+
+    void plot_left_arrow(size_t x, size_t y) {
+
+    }
+
+    void plot_right_arrow(size_t x, size_t y) {
+        
+    }
+    void plot_up_arrow(size_t x, size_t y) {
+        
+    }
+    void plot_down_arrow(size_t x, size_t y) {
+        
+    }
 
     static bool load_sim_file(const std::string& path, stepmania_sim_file_t& sim_file) {
 
@@ -141,8 +208,6 @@ private:
             close(sim_file_descriptor);
             return false;
         }
-
-        std::cout << bytes_to_read << " bytes read using mmap..." << std::endl;
 
         std::string current_line;
         for(size_t index = 0; index < bytes_to_read; index++) {
@@ -211,24 +276,53 @@ private:
                                 }
                             }
                         }
-                        std::cout << "BPM is " << sim_file.bpm << std::endl;
                     }
 
+                    stepmania_chart_t chart;
+
+                    if ("#STEPSTYPE" == key_name) {
+                        chart.is_single_chart =  ("#STEPSTYPE" == key_name) && ("dance-single" == value_as_string);
+                    }
+
+                    if ("#METER" == key_name) {
+                         chart.level = std::stod(value_as_string);
+                    }
+ 
                     if ("#NOTES" == key_name) {
-                      std::string notes_per_measure; // Contains 4 slots per row per say
-                      for(size_t index = 0; index < value_as_string.size(); index++) {
+                   
+                     stepmania_measure_t current_measure;
+                     for(size_t index = 0; index < value_as_string.size(); index++) {
                         const char current_char = value_as_string[index];
+                        
                           switch(current_char) {
                                 case ',': {
-                                    notes_per_measure = "";
+                                    chart.measures.push_back(current_measure);
+                                    current_measure = {};
                                     break;
-                                };
+                                }
+                                case stepmania_note_type_t::empty: {
+                                    current_measure.notes.push_back(stepmania_note_type_t::empty);
+                                    break;
+                                }
+                                case stepmania_note_type_t::hold: {
+                                    current_measure.notes.push_back(stepmania_note_type_t::hold);
+                                    break;
+                                }
+                                case stepmania_note_type_t::mine: {
+                                    current_measure.notes.push_back(stepmania_note_type_t::mine);
+                                    break;
+                                }
+                                case stepmania_note_type_t::tap: {
+                                    current_measure.notes.push_back(stepmania_note_type_t::tap);
+                                    break;
+                                }
                                 default: {
-                                    notes_per_measure += current_char;
+                                    current_measure = {};
                                     break;
                                 }
                             }
                       }
+                      sim_file.charts.push_back(chart);
                     }
 
                     current_line = "";
