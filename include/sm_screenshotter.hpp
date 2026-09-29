@@ -16,7 +16,6 @@
 #include <sys/stat.h>
 
 constexpr const size_t MAX_BMP_BUFFER_SIZE{128000};
-constexpr const uint32_t WHITE_RGB{0xffffffff};
 
 // To render the screenshot...
 struct bitmap_header_t {
@@ -84,7 +83,10 @@ public:
         const std::string right_arrow_path{assets_path + "/right_arrow.bmp"};
         const std::string up_arrow_path{assets_path + "/up_arrow.bmp"};
         const std::string down_arrow_path{assets_path + "/down_arrow.bmp"};
-        
+        m_left_arrow_bmp_header = {};
+        m_right_arrow_bmp_header = {};
+        m_up_arrow_bmp_header = {};
+        m_down_arrow_bmp_header = {};
         m_loaded_all_assets = load_32_bits_per_pixel_bitmap(left_arrow_path, m_left_arrow_bmp_header, m_left_arrow_bmp_buffer);
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(right_arrow_path, m_right_arrow_bmp_header, m_right_arrow_bmp_buffer);
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(up_arrow_path, m_up_arrow_bmp_header, m_up_arrow_bmp_buffer);
@@ -99,7 +101,7 @@ public:
 
         m_height *= 132;
 
-        const size_t total_size{m_width * m_height};
+        const size_t total_size{m_width * m_height * sizeof(uint32_t)};
 
         m_bitmap_header = {};
         m_bitmap_header.magic_field[0] = 'B';
@@ -114,13 +116,21 @@ public:
         m_bitmap_header.width = m_width;
         m_bitmap_header.height = m_height;
         m_bitmap_header.data_size = sizeof(bitmap_header_t) + total_size;
-        m_bitmap_header.header_size = sizeof(bitmap_header_t);
+        m_bitmap_header.header_size = 40;
 
         m_pixel_buffer.reserve(total_size);
        
-        for(size_t _ = 0; _ < total_size; _++) {
-            m_pixel_buffer.push_back(WHITE_RGB);
+        for(size_t x = 0; x < m_width; x++) {
+            for(size_t y = 0; y < m_height; y++) {
+                m_pixel_buffer.push_back(0xff);
+                m_pixel_buffer.push_back(0xff);
+                m_pixel_buffer.push_back(0xff);
+                m_pixel_buffer.push_back(0xff);
+                //plot_pixel(x, y, 0xff, 0xff, 0xff, 0xff);
+            }
         }
+
+        plot_left_arrow(10, 800);
     }
 
      operator bool() const {
@@ -139,16 +149,16 @@ public:
         }
         
         size_t bytes_read{0};
-        bytes_read = fwrite(reinterpret_cast<uint8_t*>(&m_bitmap_header), 1, sizeof(bitmap_header_t), bitmap_handle);
+        bytes_read = fwrite(reinterpret_cast<uint8_t*>(&m_bitmap_header), sizeof(uint8_t), sizeof(bitmap_header_t), bitmap_handle);
         
         if (sizeof(bitmap_header_t) != bytes_read) {
             fclose(bitmap_handle);
             return false;
         }
 
-        bytes_read += fwrite(m_pixel_buffer.data(), m_pixel_buffer.size(), sizeof(uint32_t), bitmap_handle);
+        bytes_read += fwrite(m_pixel_buffer.data(), sizeof(uint8_t), m_pixel_buffer.size(), bitmap_handle);
         fclose(bitmap_handle);
-        return bytes_read == (sizeof(bitmap_header_t) + (m_pixel_buffer.size() * sizeof(uint32_t)));
+        return bytes_read == (sizeof(bitmap_header_t) + m_pixel_buffer.size());
      }
 
 private:
@@ -166,14 +176,32 @@ private:
     const size_t m_width{600};
     size_t m_height;
     bitmap_header_t m_bitmap_header;
-    std::vector<uint32_t> m_pixel_buffer;
+    std::vector<uint8_t> m_pixel_buffer;
 
-    void plot_pixel(size_t x, size_t y, uint32_t rgb) {
-        m_pixel_buffer[(y * m_width) + x] = rgb;
+    void plot_byte(size_t x, size_t y, uint8_t byte) {
+        //std::cout << "plot_pixel x=" << x << " y=" << y << " rgb=" << rgb << std::endl;
+        m_pixel_buffer[(y * m_width * 4) + x + 1] = byte;
     }
 
-    void plot_left_arrow(size_t x, size_t y) {
+    void plot_pixel(size_t x, size_t y, uint8_t alpha, uint8_t red, uint8_t green, uint8_t blue) {
+        //std::cout << "plot_pixel x=" << x << " y=" << y << " rgb=" << rgb << std::endl;
+        m_pixel_buffer[(y * m_width) + x] = blue;
+        m_pixel_buffer[((y * m_width) + x) + 1] = green;
+        m_pixel_buffer[((y * m_width) + x) + 2] = red;
+        m_pixel_buffer[((y * m_width) + x) + 3] = alpha;
+    }
 
+
+
+    void plot_left_arrow(size_t x, size_t y) {
+        const uint32_t width = m_left_arrow_bmp_header.width * 4;
+        const uint32_t height = m_left_arrow_bmp_header.height * 4;
+        size_t index{((y * width) + x) + (width * height)};
+        std::cout << m_left_arrow_bmp_buffer.size() << std::endl;
+        for(const auto& byte : m_left_arrow_bmp_buffer) {
+            plot_byte(index / width, index % width, byte);
+            index--;
+        }
     }
 
     void plot_right_arrow(size_t x, size_t y) {
@@ -353,14 +381,14 @@ private:
         }
         char buffer[MAX_BMP_BUFFER_SIZE];
         memset(buffer, 0, sizeof(buffer));
-        size_t bytes_read = fread(buffer, sizeof(buffer), sizeof(uint8_t), file_handle);
+        size_t bytes_read = fread(buffer, sizeof(uint8_t), sizeof(buffer), file_handle);
         if (0 == bytes_read) {
             return false;
         }
 
         header = *reinterpret_cast<bitmap_header_t*>(buffer);
 
-        for(size_t index = 0; index < bytes_read; index++) {
+        for(size_t index = sizeof(bitmap_header_t); index < (bytes_read - sizeof(bitmap_header_t)); index++) {
             pixel_buffer.push_back(buffer[index]);
         }
 
