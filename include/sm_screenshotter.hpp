@@ -55,14 +55,18 @@ enum stepmania_note_type_t : char {
     mine = 'M'
 };
 
-struct stepmania_note_rows_t {
+struct stepmania_note_row_t {
     stepmania_note_type_t notes[4];
+};
+
+struct stepmania_measure_t {
+    std::vector<stepmania_note_row_t> rows;
 };
 
 struct stepmania_chart_t {
     uint8_t level;
     bool is_single_chart;
-    std::vector<stepmania_note_type_t> note_rows;
+    std::vector<stepmania_measure_t> measures;
 };
 
 
@@ -211,7 +215,20 @@ private:
                     }
 
                     if ("#NOTES" == key_name) {
-                      std::cout << value_as_string << std::endl;
+                      std::string notes_per_measure; // Contains 4 slots per row per say
+                      for(size_t index = 0; index < value_as_string.size(); index++) {
+                        const char current_char = value_as_string[index];
+                          switch(current_char) {
+                                case ',': {
+                                    notes_per_measure = "";
+                                    break;
+                                };
+                                default: {
+                                    notes_per_measure += current_char;
+                                    break;
+                                }
+                            }
+                      }
                     }
 
                     current_line = "";
