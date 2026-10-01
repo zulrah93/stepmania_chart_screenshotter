@@ -130,7 +130,10 @@ public:
             }
         }
 
-        plot_left_arrow(10, 800);
+        plot_left_arrow(m_height - 300, 400);
+        plot_down_arrow(m_height - 300, 1000);
+        plot_up_arrow(m_height - 300  , 1600);
+        plot_right_arrow(m_height - 300, 2200);
     }
 
      operator bool() const {
@@ -173,18 +176,16 @@ private:
     bitmap_header_t m_down_arrow_bmp_header;
     stepmania_sim_file_t m_loaded_sim_file;
     bool m_loaded_all_assets;
-    const size_t m_width{600};
+    const size_t m_width{800};
     size_t m_height;
     bitmap_header_t m_bitmap_header;
     std::vector<uint8_t> m_pixel_buffer;
 
     void plot_byte(size_t x, size_t y, uint8_t byte) {
-        //std::cout << "plot_pixel x=" << x << " y=" << y << " rgb=" << rgb << std::endl;
-        m_pixel_buffer[(y * m_width * 4) + x + 1] = byte;
+        m_pixel_buffer[(y * m_width * sizeof(uint32_t)) + x] = byte;
     }
 
     void plot_pixel(size_t x, size_t y, uint8_t alpha, uint8_t red, uint8_t green, uint8_t blue) {
-        //std::cout << "plot_pixel x=" << x << " y=" << y << " rgb=" << rgb << std::endl;
         m_pixel_buffer[(y * m_width) + x] = blue;
         m_pixel_buffer[((y * m_width) + x) + 1] = green;
         m_pixel_buffer[((y * m_width) + x) + 2] = red;
@@ -194,24 +195,41 @@ private:
 
 
     void plot_left_arrow(size_t x, size_t y) {
-        const uint32_t width = m_left_arrow_bmp_header.width * 4;
-        const uint32_t height = m_left_arrow_bmp_header.height * 4;
-        size_t index{((y * width) + x) + (width * height)};
-        std::cout << m_left_arrow_bmp_buffer.size() << std::endl;
+        const uint32_t width = m_left_arrow_bmp_header.width * sizeof(uint32_t);
+        const uint32_t height = m_left_arrow_bmp_header.height * sizeof(uint32_t);
+        size_t index{};
         for(const auto& byte : m_left_arrow_bmp_buffer) {
-            plot_byte(index / width, index % width, byte);
-            index--;
+            plot_byte((index % width) + y, (index / width) + x, byte);
+            index++;
         }
     }
 
     void plot_right_arrow(size_t x, size_t y) {
-        
+        const uint32_t width = m_right_arrow_bmp_header.width * sizeof(uint32_t);
+        const uint32_t height = m_right_arrow_bmp_header.height * sizeof(uint32_t);
+        size_t index{};
+        for(const auto& byte : m_right_arrow_bmp_buffer) {
+            plot_byte((index % width) + y, (index / width) + x, byte);
+            index++;
+        }
     }
     void plot_up_arrow(size_t x, size_t y) {
-        
+        const uint32_t width = m_up_arrow_bmp_header.width * sizeof(uint32_t);
+        const uint32_t height = m_up_arrow_bmp_header.height * sizeof(uint32_t);
+        size_t index{};
+        for(const auto& byte : m_up_arrow_bmp_buffer) {
+            plot_byte((index % width) + y, (index / width) + x, byte);
+            index++;
+        }
     }
     void plot_down_arrow(size_t x, size_t y) {
-        
+        const uint32_t width = m_down_arrow_bmp_header.width * sizeof(uint32_t);
+        const uint32_t height = m_down_arrow_bmp_header.height * sizeof(uint32_t);
+        size_t index{};
+        for(const auto& byte : m_down_arrow_bmp_buffer) {
+            plot_byte((index % width) + y, (index / width) + x, byte);
+            index++;
+        }
     }
 
     static bool load_sim_file(const std::string& path, stepmania_sim_file_t& sim_file) {
@@ -388,7 +406,9 @@ private:
 
         header = *reinterpret_cast<bitmap_header_t*>(buffer);
 
-        for(size_t index = sizeof(bitmap_header_t); index < (bytes_read - sizeof(bitmap_header_t)); index++) {
+        std::cout << "path=" << path << " header_size=" << header.header_size  << " offset_to_pixels=" << header.offset_to_pixels << std::endl;
+
+        for(size_t index = header.offset_to_pixels; index < (bytes_read - header.offset_to_pixels); index++) {
             pixel_buffer.push_back(buffer[index]);
         }
 
