@@ -16,6 +16,7 @@
 #include <sys/stat.h>
 
 constexpr const size_t MAX_BMP_BUFFER_SIZE{128000};
+constexpr const size_t MAX_FONT_BUFFER_SIZE{9000};
 
 // To render the screenshot...
 struct bitmap_header_t {
@@ -46,6 +47,13 @@ struct bitmap_header_t {
     uint32_t bytes_per_glyph;
     uint32_t glyph_height;
     uint32_t glyph_width;
+  };
+
+  static constexpr size_t MAX_FONT_BITMAP_SIZE{16*512};
+
+  struct font_t {
+    psf_header_t font_header;
+    uint8_t font_bitmap[MAX_FONT_BITMAP_SIZE];
   };
 
 
@@ -83,16 +91,21 @@ public:
         const std::string right_arrow_path{assets_path + "/right_arrow.bmp"};
         const std::string up_arrow_path{assets_path + "/up_arrow.bmp"};
         const std::string down_arrow_path{assets_path + "/down_arrow.bmp"};
+        const std::string mine_arrow_path{assets_path + "/mine.bmp"};
         m_left_arrow_bmp_header = {};
         m_right_arrow_bmp_header = {};
         m_up_arrow_bmp_header = {};
         m_down_arrow_bmp_header = {};
+        m_mine_bmp_header = {};
         m_loaded_all_assets = load_32_bits_per_pixel_bitmap(left_arrow_path, m_left_arrow_bmp_header, m_left_arrow_bmp_buffer);
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(right_arrow_path, m_right_arrow_bmp_header, m_right_arrow_bmp_buffer);
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(up_arrow_path, m_up_arrow_bmp_header, m_up_arrow_bmp_buffer);
         m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(down_arrow_path, m_down_arrow_bmp_header, m_down_arrow_bmp_buffer);
+        m_loaded_all_assets &= load_32_bits_per_pixel_bitmap(mine_arrow_path, m_mine_bmp_header, m_mine_bmp_buffer);
         m_loaded_sim_file = {};
         m_loaded_all_assets &= load_sim_file(chart_path, m_loaded_sim_file);
+        m_loaded_font = {};
+        m_loaded_all_assets &= load_pc_screen_font_file(assets_path + "/font.psf", m_loaded_font);
 
         m_height = 0;
         for(const auto& measure : m_loaded_sim_file.charts[0].measures) {
@@ -130,10 +143,13 @@ public:
             }
         }
 
-        plot_left_arrow(m_height - 300, 400);
-        plot_down_arrow(m_height - 300, 1000);
-        plot_up_arrow(m_height - 300  , 1600);
-        plot_right_arrow(m_height - 300, 2200);
+        plot_left_arrow(m_height - 300, 300);
+        plot_down_arrow(m_height - 300, 900);
+        plot_up_arrow(m_height - 300  , 1500);
+        plot_right_arrow(m_height - 300, 2000);
+        plot_mine_arrow(m_height - 300, 2600);
+        plot_pixel(m_height - 400, 400, 0xff, 0xff, 0x0, 0x0);
+        //plot_glyph(m_loaded_font,  '$', m_height - 400, 400);
     }
 
      operator bool() const {
@@ -170,26 +186,29 @@ private:
     std::vector<uint8_t> m_right_arrow_bmp_buffer;
     std::vector<uint8_t> m_up_arrow_bmp_buffer;
     std::vector<uint8_t> m_down_arrow_bmp_buffer;
+    std::vector<uint8_t> m_mine_bmp_buffer;
     bitmap_header_t m_left_arrow_bmp_header;
     bitmap_header_t m_right_arrow_bmp_header;
     bitmap_header_t m_up_arrow_bmp_header;
     bitmap_header_t m_down_arrow_bmp_header;
+    bitmap_header_t m_mine_bmp_header;
     stepmania_sim_file_t m_loaded_sim_file;
     bool m_loaded_all_assets;
     const size_t m_width{800};
     size_t m_height;
     bitmap_header_t m_bitmap_header;
     std::vector<uint8_t> m_pixel_buffer;
+    font_t m_loaded_font;
 
     void plot_byte(size_t x, size_t y, uint8_t byte) {
         m_pixel_buffer[(y * m_width * sizeof(uint32_t)) + x] = byte;
     }
 
     void plot_pixel(size_t x, size_t y, uint8_t alpha, uint8_t red, uint8_t green, uint8_t blue) {
-        m_pixel_buffer[(y * m_width) + x] = blue;
-        m_pixel_buffer[((y * m_width) + x) + 1] = green;
-        m_pixel_buffer[((y * m_width) + x) + 2] = red;
-        m_pixel_buffer[((y * m_width) + x) + 3] = alpha;
+        m_pixel_buffer[(y * m_width * sizeof(uint32_t)) + x] = blue;
+        m_pixel_buffer[((y * m_width * sizeof(uint32_t)) + x) + 1] = green;
+        m_pixel_buffer[((y * m_width * sizeof(uint32_t)) + x) + 2] = red;
+        m_pixel_buffer[((y * m_width * sizeof(uint32_t)) + x) + 3] = alpha;
     }
 
 
@@ -213,7 +232,8 @@ private:
             index++;
         }
     }
-    void plot_up_arrow(size_t x, size_t y) {
+
+    void plot_up_arrow(const size_t x, const size_t y) {
         const uint32_t width = m_up_arrow_bmp_header.width * sizeof(uint32_t);
         const uint32_t height = m_up_arrow_bmp_header.height * sizeof(uint32_t);
         size_t index{};
@@ -222,13 +242,38 @@ private:
             index++;
         }
     }
-    void plot_down_arrow(size_t x, size_t y) {
+
+    void plot_down_arrow(const size_t x, const size_t y) {
         const uint32_t width = m_down_arrow_bmp_header.width * sizeof(uint32_t);
         const uint32_t height = m_down_arrow_bmp_header.height * sizeof(uint32_t);
         size_t index{};
         for(const auto& byte : m_down_arrow_bmp_buffer) {
             plot_byte((index % width) + y, (index / width) + x, byte);
             index++;
+        }
+    }
+
+    void plot_mine_arrow(const size_t x, const size_t y) {
+        const uint32_t width = m_mine_bmp_header.width * sizeof(uint32_t);
+        const uint32_t height = m_mine_bmp_header.height * sizeof(uint32_t);
+        size_t index{};
+        for(const auto& byte : m_mine_bmp_buffer) {
+            plot_byte((index % width) + y, (index / width) + x, byte);
+            index++;
+        }
+    }
+
+    void plot_glyph(const font_t& font_handle, const uint8_t glyph_index, const size_t row, const size_t column) {
+        const size_t index{static_cast<size_t>(glyph_index) * static_cast<size_t>(font_handle.font_header.bytes_per_glyph)};
+        const size_t x{row};
+        const size_t y{column};
+        for (uint32_t height = 0; height < font_handle.font_header.glyph_height; height++) {
+            uint8_t row = font_handle.font_bitmap[height+index];
+            for (uint32_t width = 0; width < font_handle.font_header.glyph_width; width++) {
+                if (((row & (1 << width)) >> width) == 1) {
+                    plot_pixel((y+height),  (x+(font_handle.font_header.glyph_width-width-1)),0x00, 0xff, 0x0,0x0); 
+                }
+            }
         }
     }
 
@@ -385,6 +430,29 @@ private:
         }
 
         close(sim_file_descriptor);
+
+        return true;
+    }
+
+    static bool load_pc_screen_font_file(const std::string& path, font_t& font_handle) {
+
+        FILE* file_handle = fopen(path.c_str(), "rb");
+        if (nullptr == file_handle) {
+            return false;
+        }
+
+        char buffer[MAX_FONT_BUFFER_SIZE];
+        memset(buffer, 0, sizeof(buffer));
+        size_t bytes_read = fread(buffer, sizeof(uint8_t), sizeof(buffer), file_handle);
+        if (0 == bytes_read) {
+            return false;
+        }
+
+        font_handle.font_header = *reinterpret_cast<psf_header_t*>(buffer);
+
+        const size_t bitmap_size{bytes_read - font_handle.font_header.this_header_size};
+
+        memcpy(font_handle.font_bitmap, buffer + font_handle.font_header.this_header_size, bitmap_size);
 
         return true;
     }

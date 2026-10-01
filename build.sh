@@ -1,1 +1,1 @@
-clang++ src/main.cpp -o bin/sm_chart_screenshot -O3 -cxx-isysteminclude -Wall --std=c++23 -DDEBUG
+clang++ src/main.cpp -o bin/sm_chart_screenshot -O3 -cxx-isysteminclude -Wall --std=c++23 -DDEBUG $1
