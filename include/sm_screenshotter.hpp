@@ -148,8 +148,9 @@ public:
         plot_up_arrow(m_height - 300  , 1500);
         plot_right_arrow(m_height - 300, 2000);
         plot_mine_arrow(m_height - 300, 2600);
-        plot_pixel(m_height - 400, 400, 0xff, 0xff, 0x0, 0x0);
-        //plot_glyph(m_loaded_font,  '$', m_height - 400, 400);
+        //for(size_t y{}; y < 10; y++)
+          //  plot_pixel(400, 400 + y, 0xff, 0x00, 0x00, 0x00);
+        plot_glyph(m_loaded_font,  '$', 400, 400);
     }
 
      operator bool() const {
@@ -271,7 +272,7 @@ private:
             uint8_t row = font_handle.font_bitmap[height+index];
             for (uint32_t width = 0; width < font_handle.font_header.glyph_width; width++) {
                 if (((row & (1 << width)) >> width) == 1) {
-                    plot_pixel((y+height),  (x+(font_handle.font_header.glyph_width-width-1)),0x00, 0xff, 0x0,0x0); 
+                    plot_pixel((y+height),  (x+(font_handle.font_header.glyph_width-width-1)),0xff, 0x00, 0x0,0x0); 
                 }
             }
         }
