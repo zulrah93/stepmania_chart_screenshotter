@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <iterator>
 #include <stdint.h>
+#include <bitset>
 #include <utility>
 #include <string>
 #include <sys/fcntl.h>
@@ -150,7 +151,8 @@ public:
         plot_mine_arrow(m_height - 300, 2600);
         //for(size_t y{}; y < 10; y++)
           //  plot_pixel(400, 400 + y, 0xff, 0x00, 0x00, 0x00);
-        plot_glyph(m_loaded_font,  '$', 400, 400);
+        for(uint8_t offset{}; offset <= 9; offset++) 
+            plot_glyph(m_loaded_font,  '0' + offset,  m_height - 400, 400 + (8 * offset));
     }
 
      operator bool() const {
@@ -236,7 +238,6 @@ private:
 
     void plot_up_arrow(const size_t x, const size_t y) {
         const uint32_t width = m_up_arrow_bmp_header.width * sizeof(uint32_t);
-        const uint32_t height = m_up_arrow_bmp_header.height * sizeof(uint32_t);
         size_t index{};
         for(const auto& byte : m_up_arrow_bmp_buffer) {
             plot_byte((index % width) + y, (index / width) + x, byte);
@@ -246,7 +247,6 @@ private:
 
     void plot_down_arrow(const size_t x, const size_t y) {
         const uint32_t width = m_down_arrow_bmp_header.width * sizeof(uint32_t);
-        const uint32_t height = m_down_arrow_bmp_header.height * sizeof(uint32_t);
         size_t index{};
         for(const auto& byte : m_down_arrow_bmp_buffer) {
             plot_byte((index % width) + y, (index / width) + x, byte);
@@ -256,7 +256,6 @@ private:
 
     void plot_mine_arrow(const size_t x, const size_t y) {
         const uint32_t width = m_mine_bmp_header.width * sizeof(uint32_t);
-        const uint32_t height = m_mine_bmp_header.height * sizeof(uint32_t);
         size_t index{};
         for(const auto& byte : m_mine_bmp_buffer) {
             plot_byte((index % width) + y, (index / width) + x, byte);
@@ -264,15 +263,17 @@ private:
         }
     }
 
-    void plot_glyph(const font_t& font_handle, const uint8_t glyph_index, const size_t row, const size_t column) {
+    void plot_glyph(const font_t& font_handle, const uint8_t glyph_index, const size_t x, const size_t y) {
+        const size_t pixel_padding{1};
         const size_t index{static_cast<size_t>(glyph_index) * static_cast<size_t>(font_handle.font_header.bytes_per_glyph)};
-        const size_t x{row};
-        const size_t y{column};
-        for (uint32_t height = 0; height < font_handle.font_header.glyph_height; height++) {
-            uint8_t row = font_handle.font_bitmap[height+index];
-            for (uint32_t width = 0; width < font_handle.font_header.glyph_width; width++) {
-                if (((row & (1 << width)) >> width) == 1) {
-                    plot_pixel((y+height),  (x+(font_handle.font_header.glyph_width-width-1)),0xff, 0x00, 0x0,0x0); 
+        for(uint32_t row_index = 0; row_index < (font_handle.font_header.glyph_height / sizeof(uint8_t)); row_index++) {
+            uint8_t row = font_handle.font_bitmap[index + row_index];
+            std::bitset<8> row_bits{row};
+            for(int32_t column_index = font_handle.font_header.glyph_width - 1; column_index >= 0; column_index--) {
+                if (row_bits[column_index]) {
+                    const size_t true_x{y + row_index + pixel_padding};
+                    const size_t true_y{x + column_index + pixel_padding};
+                    plot_pixel(true_x, true_y, 0xff,  0x00, 0x00, 0x00);
                 }
             }
         }
@@ -450,6 +451,8 @@ private:
         }
 
         font_handle.font_header = *reinterpret_cast<psf_header_t*>(buffer);
+
+        std::cout << "Loaded a font @ " << path << " that has a size of " << font_handle.font_header.glyph_width << " x " << font_handle.font_header.glyph_height << std::endl;
 
         const size_t bitmap_size{bytes_read - font_handle.font_header.this_header_size};
 
