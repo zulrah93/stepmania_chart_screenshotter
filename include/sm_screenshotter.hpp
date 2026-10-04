@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <iterator>
 #include <stdint.h>
+#include <algorithm>
 #include <bitset>
 #include <utility>
 #include <string>
@@ -18,6 +19,13 @@
 
 constexpr const size_t MAX_BMP_BUFFER_SIZE{128000};
 constexpr const size_t MAX_FONT_BUFFER_SIZE{9000};
+
+using rgb_t = uint32_t;
+using pixel_data_t = std::vector<rgb_t>;
+
+constexpr rgb_t make_rgb(uint8_t alpha, uint8_t red, uint8_t green, uint8_t blue) {
+    return 0;
+}
 
 // To render the screenshot...
 struct bitmap_header_t {
@@ -115,7 +123,148 @@ public:
 
         m_height *= 132;
 
-        const size_t total_size{m_width * m_height * sizeof(uint32_t)};
+        std::cout << "width=" << m_width << " m_height=" << m_height << std::endl;
+
+        initialize_bitmap();
+
+        //plot_left_arrow(m_height - 300, 300);
+       // plot_down_arrow(m_height - 300, 900);
+        plot_up_arrow(m_height - 300  , 300);
+        plot_right_arrow(m_height - 300, 600);
+        plot_mine_arrow(m_height - 300, 10);
+
+         //for(size_t y{}; y < 10000; y++) {
+            //plot_pixel(400 + y, 400 + y, 0x0);
+            plot_glyph(m_loaded_font, '$', m_height - 200, 400);
+            for(size_t y{}; y <= 9; y++)
+                plot_glyph(m_loaded_font, '0' + y, m_height - 220, 440 + y + 32);
+      //  }
+
+      /*  
+       */
+        //  plot_pixel(m_height - 1, 0, 0xff, 0x00, 0x00);
+       // for(uint8_t offset{}; offset <= 127; offset++) 
+         //   plot_glyph(m_loaded_font,  '\0' + offset,  m_height - 32, m_width - (32 * offset));
+         
+
+    }
+
+     operator bool() const {
+        return m_loaded_all_assets;
+     }
+
+     bool loaded_all_assets() const {
+        return m_loaded_all_assets;
+     }
+
+     bool save(const std::string& path) {
+        FILE* bitmap_handle = fopen(path.c_str(), "wb");
+        if (nullptr == bitmap_handle) {
+            fclose(bitmap_handle);
+            return false;
+        }
+        
+        size_t bytes_written{0};
+        bytes_written = fwrite(reinterpret_cast<uint8_t*>(&m_bitmap_header), sizeof(uint8_t), sizeof(bitmap_header_t), bitmap_handle);
+        
+        if (sizeof(bitmap_header_t) != bytes_written) {
+            fclose(bitmap_handle);
+            return false;
+        }
+
+       // std::reverse(m_pixel_buffer.begin(), m_pixel_buffer.end());
+
+        bytes_written += fwrite(m_pixel_buffer.data(), sizeof(rgb_t), m_pixel_buffer.size(), bitmap_handle);
+        std::cout << "Saving " << bytes_written << std::endl;
+        fclose(bitmap_handle);
+        return bytes_written == (sizeof(bitmap_header_t) + m_pixel_buffer.size());
+     }
+
+private:
+
+    pixel_data_t m_left_arrow_bmp_buffer;
+    pixel_data_t m_right_arrow_bmp_buffer;
+    pixel_data_t m_up_arrow_bmp_buffer;
+    pixel_data_t m_down_arrow_bmp_buffer;
+    pixel_data_t m_mine_bmp_buffer;
+    bitmap_header_t m_left_arrow_bmp_header;
+    bitmap_header_t m_right_arrow_bmp_header;
+    bitmap_header_t m_up_arrow_bmp_header;
+    bitmap_header_t m_down_arrow_bmp_header;
+    bitmap_header_t m_mine_bmp_header;
+    stepmania_sim_file_t m_loaded_sim_file;
+    bool m_loaded_all_assets;
+    const size_t m_width{800};
+    size_t m_height;
+    bitmap_header_t m_bitmap_header;
+    pixel_data_t m_pixel_buffer;
+    font_t m_loaded_font;
+
+    void plot_pixel(size_t x, size_t y, rgb_t rgb) {
+        m_pixel_buffer[(y * m_width) + x] = rgb;
+    }
+
+    void plot_left_arrow(size_t x, size_t y) {
+        const uint32_t width = m_left_arrow_bmp_header.width;
+        const uint32_t height = m_left_arrow_bmp_header.height;
+        size_t index{};
+        for(const rgb_t& rgb : m_left_arrow_bmp_buffer) {
+            plot_pixel((index % width) + y, (index / width) + x, rgb);
+            index++;
+        }
+    }
+
+    void plot_right_arrow(size_t x, size_t y) {
+        const uint32_t width = m_right_arrow_bmp_header.width;
+        size_t index{};
+        for(const rgb_t& rgb : m_right_arrow_bmp_buffer) {
+            plot_pixel((index % width) + y, (index / width) + x, rgb);
+            index++;
+        }
+    }
+
+    void plot_up_arrow(const size_t x, const size_t y) {
+        const uint32_t width = m_up_arrow_bmp_header.width;
+        size_t index{};
+        for(const rgb_t& rgb : m_up_arrow_bmp_buffer) {
+            plot_pixel((index % width) + y, (index / width) + x, rgb);
+            index++;
+        }
+    }
+
+    void plot_down_arrow(const size_t x, const size_t y) {
+        const uint32_t width = m_down_arrow_bmp_header.width;
+        size_t index{};
+        for(const rgb_t& rgb : m_down_arrow_bmp_buffer) {
+            plot_pixel((index % width) + y, (index / width) + x, rgb);
+            index++;
+        }
+    }
+
+    void plot_mine_arrow(const size_t x, const size_t y) {
+        const uint32_t width = m_mine_bmp_header.width;
+        size_t index{};
+        for(const rgb_t& rgb : m_mine_bmp_buffer) {
+            plot_pixel((index % width) + y, (index / width) + x, rgb);
+            index++;
+        }
+    }
+
+    void plot_glyph(const font_t& font_handle, const uint8_t glyph_index, const size_t x, const size_t y) {
+       const size_t index{static_cast<size_t>(font_handle.font_header.bytes_per_glyph) *  static_cast<size_t>(glyph_index)};
+       for(size_t row_index{}; row_index < font_handle.font_header.bytes_per_glyph; row_index++) {
+            std::bitset<8> row{font_handle.font_bitmap[index + row_index]};
+            for(int32_t column_index{row.size() - 1}; column_index >= 0; column_index--) {
+                if (row[column_index]) {
+                    plot_pixel((y * font_handle.font_header.glyph_height) + row_index, 
+                            (x + font_handle.font_header.glyph_width) + column_index, 0x00);
+                }
+            }
+       }
+    }
+
+    void initialize_bitmap() {
+        const size_t total_size{m_width * m_height};
 
         m_bitmap_header = {};
         m_bitmap_header.magic_field[0] = 'B';
@@ -136,145 +285,7 @@ public:
        
         for(size_t x = 0; x < m_width; x++) {
             for(size_t y = 0; y < m_height; y++) {
-                m_pixel_buffer.push_back(0xff);
-                m_pixel_buffer.push_back(0xff);
-                m_pixel_buffer.push_back(0xff);
-                m_pixel_buffer.push_back(0xff);
-                //plot_pixel(x, y, 0xff, 0xff, 0xff, 0xff);
-            }
-        }
-
-        plot_left_arrow(m_height - 300, 300);
-        plot_down_arrow(m_height - 300, 900);
-        plot_up_arrow(m_height - 300  , 1500);
-        plot_right_arrow(m_height - 300, 2000);
-        plot_mine_arrow(m_height - 300, 2600);
-        //for(size_t y{}; y < 10; y++)
-          //  plot_pixel(400, 400 + y, 0xff, 0x00, 0x00, 0x00);
-        for(uint8_t offset{}; offset <= 9; offset++) 
-            plot_glyph(m_loaded_font,  '0' + offset,  m_height - 400, 400 + (8 * offset));
-    }
-
-     operator bool() const {
-        return m_loaded_all_assets;
-     }
-
-     bool loaded_all_assets() const {
-        return m_loaded_all_assets;
-     }
-
-     bool save(const std::string& path) {
-        FILE* bitmap_handle = fopen(path.c_str(), "wb");
-        if (nullptr == bitmap_handle) {
-            fclose(bitmap_handle);
-            return false;
-        }
-        
-        size_t bytes_read{0};
-        bytes_read = fwrite(reinterpret_cast<uint8_t*>(&m_bitmap_header), sizeof(uint8_t), sizeof(bitmap_header_t), bitmap_handle);
-        
-        if (sizeof(bitmap_header_t) != bytes_read) {
-            fclose(bitmap_handle);
-            return false;
-        }
-
-        bytes_read += fwrite(m_pixel_buffer.data(), sizeof(uint8_t), m_pixel_buffer.size(), bitmap_handle);
-        fclose(bitmap_handle);
-        return bytes_read == (sizeof(bitmap_header_t) + m_pixel_buffer.size());
-     }
-
-private:
-
-    std::vector<uint8_t> m_left_arrow_bmp_buffer;
-    std::vector<uint8_t> m_right_arrow_bmp_buffer;
-    std::vector<uint8_t> m_up_arrow_bmp_buffer;
-    std::vector<uint8_t> m_down_arrow_bmp_buffer;
-    std::vector<uint8_t> m_mine_bmp_buffer;
-    bitmap_header_t m_left_arrow_bmp_header;
-    bitmap_header_t m_right_arrow_bmp_header;
-    bitmap_header_t m_up_arrow_bmp_header;
-    bitmap_header_t m_down_arrow_bmp_header;
-    bitmap_header_t m_mine_bmp_header;
-    stepmania_sim_file_t m_loaded_sim_file;
-    bool m_loaded_all_assets;
-    const size_t m_width{800};
-    size_t m_height;
-    bitmap_header_t m_bitmap_header;
-    std::vector<uint8_t> m_pixel_buffer;
-    font_t m_loaded_font;
-
-    void plot_byte(size_t x, size_t y, uint8_t byte) {
-        m_pixel_buffer[(y * m_width * sizeof(uint32_t)) + x] = byte;
-    }
-
-    void plot_pixel(size_t x, size_t y, uint8_t alpha, uint8_t red, uint8_t green, uint8_t blue) {
-        m_pixel_buffer[(y * m_width * sizeof(uint32_t)) + x] = blue;
-        m_pixel_buffer[((y * m_width * sizeof(uint32_t)) + x) + 1] = green;
-        m_pixel_buffer[((y * m_width * sizeof(uint32_t)) + x) + 2] = red;
-        m_pixel_buffer[((y * m_width * sizeof(uint32_t)) + x) + 3] = alpha;
-    }
-
-
-
-    void plot_left_arrow(size_t x, size_t y) {
-        const uint32_t width = m_left_arrow_bmp_header.width * sizeof(uint32_t);
-        const uint32_t height = m_left_arrow_bmp_header.height * sizeof(uint32_t);
-        size_t index{};
-        for(const auto& byte : m_left_arrow_bmp_buffer) {
-            plot_byte((index % width) + y, (index / width) + x, byte);
-            index++;
-        }
-    }
-
-    void plot_right_arrow(size_t x, size_t y) {
-        const uint32_t width = m_right_arrow_bmp_header.width * sizeof(uint32_t);
-        const uint32_t height = m_right_arrow_bmp_header.height * sizeof(uint32_t);
-        size_t index{};
-        for(const auto& byte : m_right_arrow_bmp_buffer) {
-            plot_byte((index % width) + y, (index / width) + x, byte);
-            index++;
-        }
-    }
-
-    void plot_up_arrow(const size_t x, const size_t y) {
-        const uint32_t width = m_up_arrow_bmp_header.width * sizeof(uint32_t);
-        size_t index{};
-        for(const auto& byte : m_up_arrow_bmp_buffer) {
-            plot_byte((index % width) + y, (index / width) + x, byte);
-            index++;
-        }
-    }
-
-    void plot_down_arrow(const size_t x, const size_t y) {
-        const uint32_t width = m_down_arrow_bmp_header.width * sizeof(uint32_t);
-        size_t index{};
-        for(const auto& byte : m_down_arrow_bmp_buffer) {
-            plot_byte((index % width) + y, (index / width) + x, byte);
-            index++;
-        }
-    }
-
-    void plot_mine_arrow(const size_t x, const size_t y) {
-        const uint32_t width = m_mine_bmp_header.width * sizeof(uint32_t);
-        size_t index{};
-        for(const auto& byte : m_mine_bmp_buffer) {
-            plot_byte((index % width) + y, (index / width) + x, byte);
-            index++;
-        }
-    }
-
-    void plot_glyph(const font_t& font_handle, const uint8_t glyph_index, const size_t x, const size_t y) {
-        const size_t pixel_padding{1};
-        const size_t index{static_cast<size_t>(glyph_index) * static_cast<size_t>(font_handle.font_header.bytes_per_glyph)};
-        for(uint32_t row_index = 0; row_index < (font_handle.font_header.glyph_height / sizeof(uint8_t)); row_index++) {
-            uint8_t row = font_handle.font_bitmap[index + row_index];
-            std::bitset<8> row_bits{row};
-            for(int32_t column_index = font_handle.font_header.glyph_width - 1; column_index >= 0; column_index--) {
-                if (row_bits[column_index]) {
-                    const size_t true_x{y + row_index + pixel_padding};
-                    const size_t true_y{x + column_index + pixel_padding};
-                    plot_pixel(true_x, true_y, 0xff,  0x00, 0x00, 0x00);
-                }
+               m_pixel_buffer.push_back(0xffffffff);
             }
         }
     }
@@ -454,14 +465,19 @@ private:
 
         std::cout << "Loaded a font @ " << path << " that has a size of " << font_handle.font_header.glyph_width << " x " << font_handle.font_header.glyph_height << std::endl;
 
-        const size_t bitmap_size{bytes_read - font_handle.font_header.this_header_size};
 
-        memcpy(font_handle.font_bitmap, buffer + font_handle.font_header.this_header_size, bitmap_size);
+        std::cout << "header_size=" << font_handle.font_header.this_header_size << std::endl;
+
+        memset(font_handle.font_bitmap, 0, sizeof(font_handle.font_bitmap));
+        size_t bitmap_index{};
+        for(size_t index = font_handle.font_header.this_header_size; index < bytes_read; index++) {
+            font_handle.font_bitmap[bitmap_index++] = buffer[index];
+        }
 
         return true;
     }
 
-    static bool load_32_bits_per_pixel_bitmap(const std::string& path, bitmap_header_t& header, std::vector<uint8_t>& pixel_buffer) {
+    static bool load_32_bits_per_pixel_bitmap(const std::string& path, bitmap_header_t& header, pixel_data_t& pixel_buffer) {
         
         pixel_buffer.reserve(MAX_BMP_BUFFER_SIZE);
 
@@ -480,9 +496,13 @@ private:
 
         std::cout << "path=" << path << " header_size=" << header.header_size  << " offset_to_pixels=" << header.offset_to_pixels << std::endl;
 
-        for(size_t index = header.offset_to_pixels; index < (bytes_read - header.offset_to_pixels); index++) {
-            pixel_buffer.push_back(buffer[index]);
+        rgb_t* pixel_data = reinterpret_cast<rgb_t*>(buffer + header.offset_to_pixels);
+
+        for(size_t index = header.offset_to_pixels; index < ((bytes_read - header.offset_to_pixels) / sizeof(rgb_t)); index++) {
+            pixel_buffer.push_back(pixel_data[index]);
         }
+
+        std::reverse(pixel_buffer.begin(), pixel_buffer.end());
 
         return true;
     }
